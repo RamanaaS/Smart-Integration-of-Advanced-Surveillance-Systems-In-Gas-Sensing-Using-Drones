@@ -1,0 +1,253 @@
+Arduino Code
+//E- 2388
+#include <Adafruit_BMP085.h>
+#define seaLevelPressure_hPa 1013.25
+#include "DHT.h"
+#define DHTPIN 7
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+Adafruit_BMP085 bmp;
+#define mq135 A0
+#define mq7 A1
+#define mq2 A2
+#define pir 4
+int us1trigPin = 12; // Trigger
+int us1echoPin = 11; // Echo
+long us1duration, us1cm, us1inches;
+int alt,t,h,pressure,mq135val,mq2val,mq7val,pirvalue;
+void setup() {
+ // put your setup code here, to run once:
+ Serial.begin(9600);
+ pinMode(mq135,INPUT);
+ pinMode(mq7,INPUT);
+ pinMode(mq2,INPUT);
+ pinMode(pir,INPUT);
+ dht.begin();
+ pinMode(us1trigPin, OUTPUT);
+ pinMode(us1echoPin, INPUT);
+ if (!bmp.begin()) {
+ Serial.println("Could not find a valid BMP085 sensor, check wiring!");
+ }
+ }
+void loop() {
+ // put your main code here, to run repeatedly:
+ultra();
+t = dht.readTemperature();
+ h = dht.readHumidity();
+ pressure=(bmp.readPressure()/100);
+mq135val=analogRead(mq135);
+ mq135val=map(mq135val,0,1023,0,100);
+ mq7val=analogRead(mq7);
+ mq7val=map(mq7val,0,1023,0,100);
+ mq2val=analogRead(mq2);
+ mq2val=map(mq2val,0,1023,0,100);
+ pirvalue=digitalRead(pir);
+ senddata();
+
+void ultra()
+ {
+ digitalWrite(us1trigPin, LOW);
+ delayMicroseconds(2);
+ digitalWrite(us1trigPin, HIGH);
+ delayMicroseconds(20);
+ digitalWrite(us1trigPin, LOW);
+ pinMode(us1echoPin, INPUT);
+ us1duration = pulseIn(us1echoPin, HIGH,26000);
+// Convert the time into a distance
+ us1cm = (us1duration/29.1); // Divide by 29.1 or multiply by 0.0343
+ }
+void senddata()
+ {
+ Serial.print('*');
+ if(t<=9){Serial.print("00"); Serial.print(t);}
+ else if(t<=99){Serial.print("0"); Serial.print(t);}
+ else if(t<=999){Serial.print(""); Serial.print(t);}
+ if(h<=9){Serial.print("00"); Serial.print(h);}
+ else if(h<=99){Serial.print("0"); Serial.print(h);}
+ else if(h<=999){Serial.print(""); Serial.print(h);}
+ if(mq135val<=9){Serial.print("00"); Serial.print(mq135val);}
+ else if(mq135val<=99){Serial.print("0"); Serial.print(mq135val);}
+ else if(mq135val<=999){Serial.print(""); Serial.print(mq135val);}
+ if(mq7val<=9){Serial.print("00"); Serial.print(mq7val);}
+ else if(mq7val<=99){Serial.print("0"); Serial.print(mq7val);}
+ else if(mq7val<=999){Serial.print(""); Serial.print(mq7val);}
+ if(mq2val<=9){Serial.print("00"); Serial.print(mq2val);}
+ else if(mq2val<=99){Serial.print("0"); Serial.print(mq2val);}
+ else if(mq2val<=999){Serial.print(""); Serial.print(mq2val);}
+ if(us1cm<=9){Serial.print("00"); Serial.print(us1cm);}
+ else if(us1cm<=99){Serial.print("0"); Serial.print(us1cm);}
+ else if(us1cm<=999){Serial.print(""); Serial.print(us1cm);}
+ if(pirvalue<=9){Serial.print("00"); Serial.print(pirvalue);}
+ else if(pirvalue<=99){Serial.print("0"); Serial.print(pirvalue);}
+ else if(pirvalue<=999){Serial.print(""); Serial.print(pirvalue);}
+if(pressure<=9){Serial.print("00"); Serial.print(pressure);}
+ else if(pressure<=99){Serial.print("0"); Serial.print(pressure);}
+ else if(pressure<=999){Serial.print(""); Serial.print(pressure);}
+ }
+Nodemcu code
+#define BLYNK_PRINT Serial
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h> #include <LCD_I2C.h>
+LCD_I2C lcd(0x27); // Default address of most PCF8574 modules,
+#include <SoftwareSerial.h>
+const char* ssid = "IOT";
+const char* password = "123456789";
+#define BLYNK_TEMPLATE_ID "TMPL3rXe2Um6c"
+#define BLYNK_TEMPLATE_NAME "MONITORING"
+#define BLYNK_AUTH_TOKEN "ew_Jv12VRB7PvwcQ602pDsp3aDoXrrDK"
+char auth[] = BLYNK_AUTH_TOKEN;
+BlynkTimer timer;
+int i;
+int pureval;
+unsigned int m=0,act=0,val,val1,val2,val3,val4,val5,val6,val7,val8;
+String inputString = "";
+unsigned char a[200];
+SoftwareSerial GPS_SoftSerial(D3, D4);/* (Rx, Tx) */
+TinyGPSPlus gps;
+volatile float minutes, seconds;
+volatile int degree, secs, mins;
+float latn,longn;
+ double lat_val, lng_val, alt_m_val;
+ uint8_t hr_val, min_val, sec_val;
+ bool loc_valid, alt_valid, time_valid;
+void setup()
+{
+ // Debug console
+ Serial.begin(9600);
+ lcd.begin(); // If you are using more I2C devices using the Wire library use
+lcd.begin(false)
+ // this stop the library(LCD_I2C) from calling Wire.begin()
+ lcd.backlight();
+ Blynk.begin(auth, ssid, password, "blynk.cloud", 80);
+ Serial.println("BNlynk Completed");
+ }
+void loop()
+{
+ gpsread();
+ delay(100);
+ rec();
+ delay(100);
+ delay(100);
+ Blynk.virtualWrite(V0,"T:"+String(val1)+" H:"+String(val2)+"
+AQ:"+String(val3)+" CO:"+String(val4)+" G:"+String(val5));
+ delay(100);
+ Blynk.virtualWrite(V1,"D:"+String(val6)+" PIR:"+String(val7)+"
+PRE:"+String(val8));
+ delay(100);
+ Blynk.virtualWrite(V2,"LAT:"+String(lat_val)+" LON:"+String(lng_val));
+ if(val6<=30){
+ Blynk.virtualWrite(V3,"OBSTACLE DETECTED!"); delay(2000);
+Blynk.virtualWrite(V3," ");
+ if(val7==1)
+ {
+ Blynk.virtualWrite(V3,"HUMAN DETECTED!");
+ delay(2000);
+ Blynk.virtualWrite(V3," ");
+}
+ lcd.setCursor(0,0);
+ lcd.print("T:");
+ lcd.print(val1);
+ lcd.setCursor(5,0);
+ lcd.print("H:");
+ lcd.print(val2);
+lcd.setCursor(10,0);
+ lcd.print("AQ:");
+ if(val3<=9){lcd.print("0"); lcd.print(val3);}
+ else if(val3<=99){lcd.print(""); lcd.print(val3);}
+ lcd.setCursor(0,1);
+ lcd.print("CO:");
+ if(val4<=9){lcd.print("0"); lcd.print(val4);}
+ else if(val4<=99){lcd.print(""); lcd.print(val4);}
+ lcd.setCursor(6,1);
+ lcd.print("G:");
+ if(val5<=9){lcd.print("0"); lcd.print(val5);}
+ else if(val5<=99){lcd.print(""); lcd.print(val5);}
+ lcd.setCursor(11,1);
+ lcd.print("P:");
+ if(val8<=9){lcd.print("00"); lcd.print(val8);}
+ else if(val8<=99){lcd.print("0"); lcd.print(val8);}
+ else if(val8<=999){lcd.print(""); lcd.print(val8);}
+ Blynk.run();
+ }
+void rec()
+ { while(Serial.available())
+ {
+ char data;
+ data=Serial.read();
+ a[m]=data;
+ if(a[0] == '*')
+ {
+ if(m<=24)
+ {m++;}
+ }
+ }
+ if(m > 1)
+ {
+ val1 = (a[1]-0x30)*100 + (a[2]-0x30)*10 + (a[3] - 0x30);
+ val2 = (a[4]-0x30)*100 + (a[5]-0x30)*10 + (a[6] - 0x30);
+ 61
+ val4 = (a[10]-0x30)*100 + (a[11]-0x30)*10 + (a[12] - 0x30);
+ val5 = (a[13]-0x30)*100 + (a[14]-0x30)*10 + (a[15] - 0x30);
+ val6 = (a[16]-0x30)*100 + (a[17]-0x30)*10 + (a[18] - 0x30);
+ val7 = (a[19]-0x30)*100 + (a[20]-0x30)*10 + (a[21] - 0x30);
+ val8 = (a[22]-0x30)*100 + (a[23]-0x30)*10 + (a[24] - 0x30);
+ m=0;
+ }
+ }
+ void gpsread()
+ { smartDelay(200); /* Generate precise delay of 1ms */
+ unsigned long start;
+ lat_val = gps.location.lat(); /* Get latitude data */
+ loc_valid = gps.location.isValid(); /* Check if valid location data is available
+*/
+ lng_val = gps.location.lng(); /* Get longtitude data */
+ alt_m_val = gps.altitude.meters(); /* Get altitude data in meters */
+ alt_valid = gps.altitude.isValid(); /* Check if valid altitude data is available
+*/
+ hr_val = gps.time.hour(); /* Get hour */
+ min_val = gps.time.minute(); /* Get minutes */
+ sec_val = gps.time.second(); /* Get seconds */
+ time_valid = gps.time.isValid(); /* Check if valid time data is available */
+ if (!loc_valid)
+ {
+ Serial.print("Latitude : ");
+ Serial.println("***");
+ Serial.print("Longitude : ");
+ Serial.println("***");
+ }
+ else
+ {
+ DegMinSec(lat_val);
+ DegMinSec(lng_val); /* Convert the decimal degree value into degrees
+minutes seconds form */
+ longn=(lng_val, 6);}
+ if (!alt_valid){ }
+ else{}
+ if (!time_valid){}
+ else{
+ char time_string[32];
+ sprintf(time_string, "Time : %02d/%02d/%02d \n", hr_val, min_val,
+sec_val);
+ Serial.print(time_string); }
+ if(!alt_valid){lat_val=11.1004;lng_val=77.0266;}
+ static void smartDelay(unsigned long ms)
+{
+ unsigned long start = millis();
+ do
+ {
+ while (GPS_SoftSerial.available()) /* Encode data read from GPS while data is
+available on serial port */
+/* Encode basically is used to parse the string received by the GPS and to store it
+in a buffer so that information can be extracted from it */
+ } while (millis() - start < ms);
+}
+void DegMinSec( double tot_val) /* Convert data in decimal degrees into
+degrees minutes seconds form */
+{
+ degree = (int)tot_val;
+ minutes = tot_val- degree;
+ seconds = 60 * minutes;
+ minutes = (int)seconds;
+ mins = (int)minutes;
+ seconds = seconds- minutes;
+ seconds = 60 * seconds;
